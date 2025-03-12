@@ -1,50 +1,42 @@
 package com.example.backend.config;
 
-import com.azure.identity.ClientSecretCredential;
-import com.azure.identity.ClientSecretCredentialBuilder;
-import com.microsoft.graph.authentication.TokenCredentialAuthProvider;
-import com.microsoft.graph.requests.GraphServiceClient;
-import lombok.Value;
+import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
+import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.JsonFactory;
+import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.services.drive.Drive;
+import com.google.api.services.drive.DriveScopes;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.Arrays;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.util.Collections;
 
 @Configuration
-public class AzureConfig {
+public class GoogleDriveConfig {
 
-    @Value("${azure.client-id}")
-    private String clientId;
+    @Value("${google.service-account-key}")
+    private String serviceAccountKey;
 
-    @Value("${azure.client-secret}")
-    private String clientSecret;
-
-    @Value("${azure.tenant-id}")
-    private String tenantId;
+    @Value("${google.application-name}")
+    private String applicationName;
 
     @Bean
-    public ClientSecretCredential clientSecretCredential() {
-        return new ClientSecretCredentialBuilder()
-                .clientId(clientId)
-                .clientSecret(clientSecret)
-                .tenantId(tenantId)
+    public Drive driveService() throws GeneralSecurityException, IOException {
+        final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+        JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
+
+        // Create GoogleCredential from service account key
+        GoogleCredential credential = GoogleCredential
+                .fromStream(new ByteArrayInputStream(serviceAccountKey.getBytes()))
+                .createScoped(Collections.singleton(DriveScopes.DRIVE_FILE));
+
+        return new Drive.Builder(HTTP_TRANSPORT, jsonFactory, credential)
+                .setApplicationName(applicationName)
                 .build();
     }
-
-    @Bean
-    public TokenCredentialAuthProvider tokenCredentialAuthProvider(ClientSecretCredential clientSecretCredential) {
-        return new TokenCredentialAuthProvider(
-                Arrays.asList("Files.ReadWrite", "User.Read"),
-                clientSecretCredential
-        );
-    }
-
-    @Bean
-    public GraphServiceClient graphServiceClient(TokenCredentialAuthProvider tokenCredentialAuthProvider) {
-        return GraphServiceClient
-                .builder()
-                .authenticationProvider(tokenCredentialAuthProvider)
-                .buildClient();
-    }
-
 }

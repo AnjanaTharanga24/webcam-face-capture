@@ -1,30 +1,30 @@
 package com.example.backend.service.impl;
 
-
-import com.azure.identity.ClientSecretCredential;
 import com.example.backend.dto.FileUploadResponse;
-import com.example.backend.service.OneDriveService;
-import com.microsoft.graph.models.DriveItem;
-import com.microsoft.graph.requests.GraphServiceClient;
+import com.example.backend.service.GoogleDriveService;
+import com.google.api.client.http.InputStreamContent;
+import com.google.api.services.drive.Drive;
+import com.google.api.services.drive.model.File;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
+import java.util.Collections;
 import java.util.UUID;
 
 @Service
-public class OneDriveServiceImpl implements OneDriveService {
+public class GoogleDriveServiceImpl implements GoogleDriveService {
 
-    @Value("${onedrive.folder-id}")
+    @Value("${google.folder-id}")
     private String folderId;
 
-    private final GraphServiceClient graphClient;
+    private final Drive driveService;
 
     @Autowired
-    public OneDriveServiceImpl(GraphServiceClient graphClient) {
-        this.graphClient = graphClient;
+    public GoogleDriveServiceImpl(Drive driveService) {
+        this.driveService = driveService;
     }
 
     @Override
@@ -33,22 +33,28 @@ public class OneDriveServiceImpl implements OneDriveService {
         String fileExtension = getFileExtension(file.getOriginalFilename());
         String uniqueFileName = UUID.randomUUID().toString() + fileExtension;
 
-        // Upload file to specified OneDrive folder
-        DriveItem uploadedFile = graphClient
-                .me()
-                .drive()
-                .items(folderId)
-                .itemWithPath(uniqueFileName)
-                .content()
-                .buildRequest()
-                .put(new ByteArrayInputStream(file.getBytes()));
+        // Create file metadata
+        File fileMetadata = new File();
+        fileMetadata.setName(uniqueFileName);
+        fileMetadata.setParents(Collections.singletonList(folderId));
+
+        // File content
+        InputStreamContent mediaContent = new InputStreamContent(
+                file.getContentType(),
+                new ByteArrayInputStream(file.getBytes())
+        );
+
+        // Upload file to Google Drive
+        File uploadedFile = driveService.files().create(fileMetadata, mediaContent)
+                .setFields("id, name, webViewLink")
+                .execute();
 
         // Create response object
         return new FileUploadResponse(
                 true,
-                uploadedFile.id,
+                uploadedFile.getId(),
                 uniqueFileName,
-                uploadedFile.webUrl
+                uploadedFile.getWebViewLink()
         );
     }
 
@@ -62,4 +68,4 @@ public class OneDriveServiceImpl implements OneDriveService {
         }
         return filename.substring(lastDotIndex);
     }
-}}
+}
